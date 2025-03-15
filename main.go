@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -15,6 +16,8 @@ import (
 	"time"
 
 	"github.com/finnigja/gomat"
+	"github.com/finnigja/gomat/discover"
+	"github.com/finnigja/gomat/onboarding_payload"
 	"github.com/finnigja/gomat/symbols"
 
 	"github.com/getlantern/systray"
@@ -40,9 +43,11 @@ var (
 	lightStatus     = lightStatusOff
 	pollingInterval = 5 * time.Second
 	appDir          string
+	appConfig       = "device_ip"
 	// matter bits
-	ip              = "192.168.86.114"
+	ip              net.IP
 	fabricId, _     = strconv.ParseUint("0x110", 0, 64)
+	userId, _       = strconv.ParseUint("100", 0, 64)
 	deviceId, _     = strconv.ParseUint("500", 0, 64)
 	controllerId, _ = strconv.ParseUint("100", 0, 64)
 	//systray bits
@@ -51,19 +56,26 @@ var (
 
 func initApp() {
 
+	log.Println("initApp() called!")
+
 	dir, dirErr := os.UserConfigDir()
-	var dirPath string
 	if dirErr == nil {
-		dirPath = filepath.Join(dir, appName)
+		appDir = filepath.Join(dir, appName)
+	} else {
+		log.Fatal("could not open working directory")
 	}
-	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		err := os.Mkdir(dirPath, 0755) // Use MkdirAll if creating nested directories
+	if _, err := os.Stat(appDir); os.IsNotExist(err) {
+		log.Println("appdir did not exist, creating")
+		err := os.Mkdir(appDir, 0755) // Use MkdirAll if creating nested directories
 		if err != nil {
 			fmt.Printf("Error creating directory: %v\n", err)
+		} else {
+			createFabricCA()
 		}
 	}
 
-	file, err := os.OpenFile(fmt.Sprintf("%s/%s", dirPath, "application.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	log.Println("opening log file for output...")
+	file, err := os.OpenFile(fmt.Sprintf("%s/%s", appDir, "application.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -76,15 +88,87 @@ func initApp() {
 		log.SetOutput(file)
 		log.Println("Terminal not detected, logging to file.")
 	}
-
-	appDir = dirPath
+	log.Println("initApp() complete")
 }
 
 func promptUser() (string, error) {
+	log.Println("promptUser()!")
+
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		log.Println("getting devices")
+		devices := discover.DiscoverAllComissionable("en0", true) // interface, ipv6_enabled
+		if len(devices) == 1 {
+			log.Println("got a device!!")
+			devices[0].Dump()
+			log.Println("IPs found: ", devices[0].Addrs)
+			// grabbing index-1 should be IPv4.. might need to make this smarter
+			ip = devices[0].Addrs[1]
+			log.Println("setting up device with index-1 IP: ", ip)
+			break
+		}
+		if i < maxRetries-1 {
+			time.Sleep(pollingInterval)
+		} else {
+			log.Println("max retries reached, giving up")
+			return "commissioning failed", fmt.Errorf("max retries reached & no device found")
+		}
+	}
+
+	log.Println("getting passcode")
+	// PIN=`./gomat decode-mc $1 | grep passcode | cut -d ' ' -f 2`
 	cmd := exec.Command("osascript", "-e",
-		`text returned of (display dialog "Enter light pairing code:" default answer "" with title "Setup a light..." buttons {"OK"} default button "OK")`)
+		`text returned of (display dialog "Found a device. Enter pairing code:" default answer "" with title "Setup a light..." buttons {"OK"} default button "OK")`)
 	output, err := cmd.Output()
-	return string(output), err
+	if err != nil {
+		return "commissioning failed", fmt.Errorf("no pin provided")
+	}
+	content := onboarding_payload.DecodeManualPairingCode(string(output))
+	passcode := content.Passcode
+
+	log.Println("commissioning device...")
+	// ./gomat commission --ip $IP --pin $PIN --controller-id 100 --device-id 500
+	fabric := createBasicFabric()
+	err = gomat.Commission(fabric, ip, int(passcode), controllerId, deviceId)
+	if err != nil {
+		return "commissioning failed", err
+	}
+
+	cf := fabric.CompressedFabric()
+	csf := hex.EncodeToString(cf)
+	dids := fmt.Sprintf("%s-%016X", csf, deviceId)
+	dids = strings.ToUpper(dids)
+	fmt.Printf("device identifier: %s\n", dids)
+
+	configFile := filepath.Join(appDir, appConfig)
+	err = os.WriteFile(configFile, []byte(ip.String()), 0644)
+	if err != nil {
+		log.Printf("warning: could not write IP to file: %v\n", err)
+	} else {
+		log.Println("newly commissioned device IP written to file")
+	}
+
+	return "commissioning completed!", nil
+}
+
+// only call this if not already bootstrapped
+func createFabricCA() {
+	cert_manager := gomat.NewFileCertManager(fabricId, appDir)
+	log.Println("bootstrapping with location: ", appDir)
+	err := cert_manager.BootstrapCa()
+	if err != nil {
+		panic(err)
+	}
+	err = cert_manager.Load()
+	if err != nil {
+		panic(err)
+	}
+	fabric := gomat.NewFabric(fabricId, cert_manager)
+	log.Println("creating new user with id: ", userId)
+	err = fabric.CertificateManager.CreateUser(uint64(userId))
+	if err != nil {
+		panic(err)
+	}
 }
 
 func createBasicFabric() *gomat.Fabric {
@@ -98,14 +182,15 @@ func createBasicFabric() *gomat.Fabric {
 }
 
 func connectDevice(fabric *gomat.Fabric) (gomat.SecureChannel, error) {
+	log.Println("connecting to device with IP: ", ip)
 	// dumb retry 3 times if err when opening connection...
-	secure_channel, err := gomat.StartSecureChannel(net.ParseIP(ip), 5540, 55555)
+	secure_channel, err := gomat.StartSecureChannel(ip, 5540, 55555)
 	if err != nil {
 		time.Sleep(1 * time.Second)
-		secure_channel, err = gomat.StartSecureChannel(net.ParseIP(ip), 5540, 55555)
+		secure_channel, err = gomat.StartSecureChannel(ip, 5540, 55555)
 		if err != nil {
 			time.Sleep(1 * time.Second)
-			secure_channel, err = gomat.StartSecureChannel(net.ParseIP(ip), 5540, 55555)
+			secure_channel, err = gomat.StartSecureChannel(ip, 5540, 55555)
 			if err != nil {
 				return secure_channel, err
 			}
