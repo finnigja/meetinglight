@@ -29,8 +29,9 @@ import (
 const (
 	deviceOnCommand  = "on"
 	deviceOffCommand = "off"
-	lightStatusOn    = "🟢"
-	lightStatusOff   = "🔴"
+	lightStatusOn    = "ON"  // "🟢"
+	lightStatusOff   = "OFF" // "🔴"
+	lightStatusNone  = "NOT PAIRED"
 )
 
 // todo:
@@ -44,6 +45,7 @@ var (
 	pollingInterval = 5 * time.Second
 	appDir          string
 	appConfig       = "device_ip"
+	deviceSetup     = false
 	// matter bits
 	ip              net.IP
 	fabricId, _     = strconv.ParseUint("0x110", 0, 64)
@@ -51,12 +53,13 @@ var (
 	deviceId, _     = strconv.ParseUint("500", 0, 64)
 	controllerId, _ = strconv.ParseUint("100", 0, 64)
 	//systray bits
-	mStatus *systray.MenuItem
+	mStatus   *systray.MenuItem
+	mOverride *systray.MenuItem
 )
 
 func initApp() {
 
-	log.Println("initApp() called!")
+	log.Println("initApp()!")
 
 	dir, dirErr := os.UserConfigDir()
 	if dirErr == nil {
@@ -88,6 +91,22 @@ func initApp() {
 		log.SetOutput(file)
 		log.Println("Terminal not detected, logging to file.")
 	}
+
+	configFile := filepath.Join(appDir, appConfig)
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		log.Printf("warning: could not read config from file: %v\n", err)
+	} else {
+		log.Println("read config from file")
+		ip = net.ParseIP(string(data))
+		if ip == nil {
+			log.Printf("could not read IP from config")
+		} else {
+			log.Printf("read IP from config, huzzah: %v\n", ip)
+			deviceSetup = true
+		}
+	}
+
 	log.Println("initApp() complete")
 }
 
@@ -146,6 +165,8 @@ func promptUser() (string, error) {
 		log.Printf("warning: could not write IP to file: %v\n", err)
 	} else {
 		log.Println("newly commissioned device IP written to file")
+		deviceSetup = true
+		updateLightStatus()
 	}
 
 	return "commissioning completed!", nil
@@ -322,14 +343,28 @@ func monitorMeetings() {
 }
 
 func updateLightStatus() string {
-	lightStatus = lightStatusOff
+	log.Println("updateLightStatus()")
+	if !deviceSetup {
+		log.Println("setting status to none")
+		lightStatus = lightStatusNone
+		if mOverride != nil {
+			mOverride.Disable()
+		}
+	} else {
+		lightStatus = lightStatusOff
+		if mOverride != nil {
+			mOverride.Enable()
+		}
+	}
 	if lightOn {
 		lightStatus = lightStatusOn
 		systray.SetIcon(IconOn)
 	} else {
 		systray.SetIcon(IconOff)
 	}
-	toggleMatterLight(lightOn)
+	if deviceSetup {
+		toggleMatterLight(lightOn)
+	}
 	log.Println("Updating light status: ", lightStatus)
 	if mStatus != nil {
 		mStatus.SetTitle(fmt.Sprintf("Status: %s", lightStatus))
@@ -343,7 +378,11 @@ func onReady() {
 	mStatus = systray.AddMenuItem(fmt.Sprintf("Status: %s", lightStatus), "")
 	mStatus.Disable()
 	mOverride := systray.AddMenuItemCheckbox("Light on regardless!", "", false)
-	mSetup := systray.AddMenuItem("Setup...", "")
+	if !deviceSetup {
+		mOverride.Disable()
+	}
+	updateLightStatus()
+	mSetup := systray.AddMenuItem("Pair a light...", "")
 	mQuit := systray.AddMenuItem("Quit", "")
 
 	for {
@@ -379,7 +418,12 @@ func onQuit() {
 func main() {
 	initApp()
 
-	go monitorMeetings()
+	if deviceSetup {
+		log.Println("device is already configured, ready to go...")
+	} else {
+		log.Println("device not yet configured, need to use setup flow...")
+	}
 
+	go monitorMeetings()
 	systray.Run(onReady, onQuit)
 }
