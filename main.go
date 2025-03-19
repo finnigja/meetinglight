@@ -42,6 +42,7 @@ var (
 	inMeeting       = false
 	lightOn         = false
 	lightStatus     = lightStatusOff
+	lightOverride   = false
 	pollingInterval = 5 * time.Second
 	appDir          string
 	appConfig       = "device_ip"
@@ -330,11 +331,9 @@ func monitorMeetings() {
 		if active != inMeeting {
 			if active {
 				inMeeting = true
-				lightOn = true
 				updateLightStatus()
 			} else {
 				inMeeting = false
-				lightOn = false
 				updateLightStatus()
 			}
 		}
@@ -355,19 +354,24 @@ func updateLightStatus() string {
 		if mOverride != nil {
 			mOverride.Enable()
 		}
-	}
-	if lightOn {
-		lightStatus = lightStatusOn
-		systray.SetIcon(IconOn)
-	} else {
-		systray.SetIcon(IconOff)
-	}
-	if deviceSetup {
-		toggleMatterLight(lightOn)
-	}
-	log.Println("Updating light status: ", lightStatus)
-	if mStatus != nil {
-		mStatus.SetTitle(fmt.Sprintf("Status: %s", lightStatus))
+
+		shouldBeOn := inMeeting || lightOverride
+		if shouldBeOn != lightOn {
+			lightOn = shouldBeOn
+			if lightOn {
+				lightStatus = lightStatusOn
+				systray.SetIcon(IconOn)
+			} else {
+				lightStatus = lightStatusOff
+				systray.SetIcon(IconOff)
+			}
+			toggleMatterLight(lightOn)
+		}
+
+		log.Println("Updating light status: ", lightStatus)
+		if mStatus != nil {
+			mStatus.SetTitle(fmt.Sprintf("Status: %s", lightStatus))
+		}
 	}
 	return lightStatus
 }
@@ -377,7 +381,7 @@ func onReady() {
 	//systray.SetTitle(appName)
 	mStatus = systray.AddMenuItem(fmt.Sprintf("Status: %s", lightStatus), "")
 	mStatus.Disable()
-	mOverride := systray.AddMenuItemCheckbox("Light on regardless!", "", false)
+	mOverride = systray.AddMenuItemCheckbox("Light on regardless!", "", false)
 	if !deviceSetup {
 		mOverride.Disable()
 	}
@@ -393,10 +397,10 @@ func onReady() {
 		case <-mOverride.ClickedCh:
 			if mOverride.Checked() {
 				mOverride.Uncheck()
-				lightOn = false
+				lightOverride = false
 			} else {
 				mOverride.Check()
-				lightOn = true
+				lightOverride = true
 			}
 			updateLightStatus()
 		case <-mSetup.ClickedCh:
@@ -412,7 +416,10 @@ func onReady() {
 }
 
 func onQuit() {
-	os.Exit(0)
+	lightOverride = false
+	updateLightStatus()
+	log.Println("Shutting down gracefully...")
+	return
 }
 
 func main() {
