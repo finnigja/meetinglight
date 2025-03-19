@@ -342,15 +342,19 @@ func monitorMeetings() {
 }
 
 func updateLightStatus() string {
-	log.Println("updateLightStatus()")
+	initialLightStatus := lightStatus
 	if !deviceSetup {
-		log.Println("setting status to none")
 		lightStatus = lightStatusNone
 		if mOverride != nil {
 			mOverride.Disable()
 		}
 	} else {
-		lightStatus = lightStatusOff
+		if lightOn {
+			lightStatus = lightStatusOn
+		} else {
+			lightStatus = lightStatusOff
+		}
+
 		if mOverride != nil {
 			mOverride.Enable()
 		}
@@ -367,7 +371,8 @@ func updateLightStatus() string {
 			}
 			toggleMatterLight(lightOn)
 		}
-
+	}
+	if initialLightStatus != lightStatus {
 		log.Println("Updating light status: ", lightStatus)
 		if mStatus != nil {
 			mStatus.SetTitle(fmt.Sprintf("Status: %s", lightStatus))

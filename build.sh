@@ -1,3 +1,4 @@
+rm ./bin/meetinglight
 go build -o bin/meetinglight
 
 # macOS packaging
