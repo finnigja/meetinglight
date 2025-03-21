@@ -391,49 +391,53 @@ func monitorDeviceConnectivity() {
 }
 
 func updateLightStatus() string {
+	// determine what status should be
 	initialLightStatus := lightStatus
 	if deviceError {
 		lightStatus = lightStatusError
-		systray.SetIcon(IconError)
-		if mOverride != nil {
-			mOverride.Disable()
-		}
 	} else {
 		if !deviceSetup {
 			lightStatus = lightStatusUnpaired
-			if mOverride != nil {
-				mOverride.Disable()
-			}
 		} else {
 			if lightOn {
 				lightStatus = lightStatusOn
 			} else {
 				lightStatus = lightStatusOff
 			}
-
-			if mOverride != nil {
-				mOverride.Enable()
-			}
-
 			shouldBeOn := inMeeting || lightOverride
 			if shouldBeOn != lightOn {
+				// todo - simplify this?
 				lightOn = shouldBeOn
 				if lightOn {
 					lightStatus = lightStatusOn
-					systray.SetIcon(IconOn)
 				} else {
 					lightStatus = lightStatusOff
-					systray.SetIcon(IconOff)
 				}
-				toggleMatterLight(lightOn)
 			}
 		}
 	}
 
+	// update UI & Matter device, based on determined status
 	if initialLightStatus != lightStatus {
 		log.Println("Updating light status: ", lightStatus)
 		if mStatus != nil {
 			mStatus.SetTitle(fmt.Sprintf("Status: %s", lightStatus))
+		}
+		switch lightStatus {
+		case lightStatusOn:
+			systray.SetIcon(IconOn)
+			mOverride.Enable()
+			toggleMatterLight(true)
+		case lightStatusError:
+			systray.SetIcon(IconError)
+			mOverride.Disable()
+		case lightStatusUnpaired:
+			systray.SetIcon(IconUnpaired)
+			mOverride.Disable()
+		default:
+			systray.SetIcon(IconOff)
+			mOverride.Enable()
+			toggleMatterLight(false)
 		}
 	}
 	return lightStatus
