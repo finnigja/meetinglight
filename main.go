@@ -27,11 +27,12 @@ import (
 )
 
 const (
-	deviceOnCommand  = "on"
-	deviceOffCommand = "off"
-	lightStatusOn    = "ON"  // "🟢"
-	lightStatusOff   = "OFF" // "🔴"
-	lightStatusNone  = "NOT PAIRED"
+	deviceOnCommand     = "on"
+	deviceOffCommand    = "off"
+	lightStatusOn       = "ON"  // "🟢"
+	lightStatusOff      = "OFF" // "🔴"
+	lightStatusUnpaired = "NOT PAIRED"
+	lightStatusError    = "ERROR"
 )
 
 // todo:
@@ -47,6 +48,7 @@ var (
 	appDir          string
 	appConfig       = "device_ip"
 	deviceSetup     = false
+	deviceError     = false
 	// matter bits
 	ip              net.IP
 	fabricId, _     = strconv.ParseUint("0x110", 0, 64)
@@ -222,6 +224,30 @@ func connectDevice(fabric *gomat.Fabric) (gomat.SecureChannel, error) {
 	return secure_channel, err
 }
 
+// check Matter device is connected
+func checkDeviceConnectivity() error {
+	fabric := createBasicFabric()
+	ch, err := connectDevice(fabric)
+	if err != nil {
+		return fmt.Errorf("failed to connect: %w", err)
+	}
+	defer ch.Close()
+
+	// todo: maybe don't need the rest of this? could be enough to just open the connection?
+
+	to_send := gomat.EncodeIMReadRequest(1, symbols.CLUSTER_ID_Descriptor, symbols.CLUSTER_ID_OnOff)
+
+	if err = ch.Send(to_send); err != nil {
+		return fmt.Errorf("failed sending read request: %w", err)
+	}
+	_, err = ch.Receive()
+	if err != nil {
+		return fmt.Errorf("failed to receive read response: %w", err)
+	}
+	// optional: parse the response to confirm we got a valid attribute
+	return nil
+}
+
 // send a command to the Matter device
 func sendDeviceCommand(command string) error {
 	fabric := createBasicFabric()
@@ -341,37 +367,67 @@ func monitorMeetings() {
 	}
 }
 
+// background task to monitor device connectivity
+func monitorDeviceConnectivity() {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		<-ticker.C
+		if deviceSetup {
+			err := checkDeviceConnectivity()
+			if err != nil {
+				log.Printf("Device connectivity check failed: %v\n", err)
+				deviceError = true
+			} else {
+				deviceError = false
+			}
+			// then update the UI so it reflects error status
+			updateLightStatus()
+		}
+	}
+}
+
 func updateLightStatus() string {
 	initialLightStatus := lightStatus
-	if !deviceSetup {
-		lightStatus = lightStatusNone
+	if deviceError {
+		lightStatus = lightStatusError
+		systray.SetIcon(IconError)
 		if mOverride != nil {
 			mOverride.Disable()
 		}
 	} else {
-		if lightOn {
-			lightStatus = lightStatusOn
+		if !deviceSetup {
+			lightStatus = lightStatusUnpaired
+			if mOverride != nil {
+				mOverride.Disable()
+			}
 		} else {
-			lightStatus = lightStatusOff
-		}
-
-		if mOverride != nil {
-			mOverride.Enable()
-		}
-
-		shouldBeOn := inMeeting || lightOverride
-		if shouldBeOn != lightOn {
-			lightOn = shouldBeOn
 			if lightOn {
 				lightStatus = lightStatusOn
-				systray.SetIcon(IconOn)
 			} else {
 				lightStatus = lightStatusOff
-				systray.SetIcon(IconOff)
 			}
-			toggleMatterLight(lightOn)
+
+			if mOverride != nil {
+				mOverride.Enable()
+			}
+
+			shouldBeOn := inMeeting || lightOverride
+			if shouldBeOn != lightOn {
+				lightOn = shouldBeOn
+				if lightOn {
+					lightStatus = lightStatusOn
+					systray.SetIcon(IconOn)
+				} else {
+					lightStatus = lightStatusOff
+					systray.SetIcon(IconOff)
+				}
+				toggleMatterLight(lightOn)
+			}
 		}
 	}
+
 	if initialLightStatus != lightStatus {
 		log.Println("Updating light status: ", lightStatus)
 		if mStatus != nil {
@@ -437,5 +493,6 @@ func main() {
 	}
 
 	go monitorMeetings()
+	go monitorDeviceConnectivity()
 	systray.Run(onReady, onQuit)
 }
