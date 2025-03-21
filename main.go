@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +61,8 @@ var (
 	//systray bits
 	mStatus   *systray.MenuItem
 	mOverride *systray.MenuItem
+	// meeting detection bits
+	meetURLRegex = regexp.MustCompile(`^https://meet\.google\.com/[a-zA-Z0-9]{3}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{3}$`)
 )
 
 func initApp() {
@@ -329,7 +332,7 @@ func isMeetingActive() bool {
 		stringSlice := strings.Split(resultStr, ",")
 		for _, v := range stringSlice {
 			url := strings.TrimSpace(v)
-			if strings.HasPrefix(url, "https://meet.google.com/") && !strings.HasPrefix(url, "https://meet.google.com/landing") {
+			if meetURLRegex.MatchString(strings.TrimSpace(url)) {
 				return true
 			}
 		}
