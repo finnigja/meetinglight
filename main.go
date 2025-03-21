@@ -37,6 +37,8 @@ const (
 
 // todo:
 //  - retry sending Matter command a few times, in case first time fails..
+//  - "discover IP address of previously commissioned device using api"
+//  - set light color to something custom
 
 var (
 	appName         = "MeetingLight"
