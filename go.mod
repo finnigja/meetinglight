@@ -3,13 +3,13 @@ module github.com/finnigja/meetinglight
 go 1.23.4
 
 require (
-	github.com/finnigja/gomat v0.0.0-20250116004814-facd6041a74c
+	github.com/finnigja/gomat v0.0.0-20250323211809-37e5411ac3e2
 	github.com/getlantern/systray v1.2.2
 	github.com/shirou/gopsutil/v4 v4.24.12
-	golang.org/x/term v0.28.0
+	golang.org/x/term v0.30.0
 )
 
-replace github.com/finnigja/gomat => ../gomat
+//replace github.com/finnigja/gomat => ../gomat
 
 require (
 	github.com/ebitengine/purego v0.8.2 // indirect
@@ -37,7 +37,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.33.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.32.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.21.0 // indirect
-	golang.org/x/sys v0.29.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
 )
