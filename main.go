@@ -129,9 +129,9 @@ func promptUser() (string, error) {
 			log.Println("got a device!!")
 			devices[0].Dump()
 			log.Println("IPs found: ", devices[0].Addrs)
-			// grabbing index-1 should be IPv4.. might need to make this smarter
-			ip = devices[0].Addrs[1]
-			log.Println("setting up device with index-1 IP: ", ip)
+			// grabbing index-0 should be IPv4.. might need to make this smarter
+			ip = devices[0].Addrs[0]
+			log.Println("setting up device with index-0 IP addr: ", ip)
 			break
 		}
 		if i < maxRetries-1 {
