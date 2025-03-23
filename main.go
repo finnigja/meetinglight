@@ -491,6 +491,7 @@ func onReady() {
 func onQuit() {
 	lightOverride = false
 	updateLightStatus()
+	toggleMatterLight(false)
 	log.Println("Shutting down gracefully...")
 	return
 }
