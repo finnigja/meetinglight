@@ -9,8 +9,6 @@ require (
 	golang.org/x/term v0.30.0
 )
 
-//replace github.com/finnigja/gomat => ../gomat
-
 require (
 	github.com/ebitengine/purego v0.8.2 // indirect
 	github.com/getlantern/context v0.0.0-20220418194847-3d5e7a086201 // indirect
