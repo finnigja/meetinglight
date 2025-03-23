@@ -234,22 +234,25 @@ func checkDeviceConnectivity() error {
 	fabric := createBasicFabric()
 	ch, err := connectDevice(fabric)
 	if err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
+		ch, err = connectDevice(fabric)
+		if err != nil {
+			return fmt.Errorf("failed to connect: %w", err)
+		}
 	}
 	defer ch.Close()
 
-	// todo: maybe don't need the rest of this? could be enough to just open the connection?
+	// think it could be enough to just open the connection, so disabling this for now...
+	//to_send := gomat.EncodeIMReadRequest(1, symbols.CLUSTER_ID_Descriptor, symbols.CLUSTER_ID_OnOff)
 
-	to_send := gomat.EncodeIMReadRequest(1, symbols.CLUSTER_ID_Descriptor, symbols.CLUSTER_ID_OnOff)
-
-	if err = ch.Send(to_send); err != nil {
-		return fmt.Errorf("failed sending read request: %w", err)
-	}
-	_, err = ch.Receive()
-	if err != nil {
-		return fmt.Errorf("failed to receive read response: %w", err)
-	}
+	//if err = ch.Send(to_send); err != nil {
+	//	return fmt.Errorf("failed sending read request: %w", err)
+	//}
+	//_, err = ch.Receive()
+	//if err != nil {
+	//	return fmt.Errorf("failed to receive read response: %w", err)
+	//}
 	// optional: parse the response to confirm we got a valid attribute
+
 	return nil
 }
 
