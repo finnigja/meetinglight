@@ -129,9 +129,21 @@ func promptUser() (string, error) {
 			log.Println("got a device!!")
 			devices[0].Dump()
 			log.Println("IPs found: ", devices[0].Addrs)
-			// grabbing index-0 should be IPv4.. might need to make this smarter
-			ip = devices[0].Addrs[0]
-			log.Println("setting up device with index-0 IP addr: ", ip)
+
+			var foundIPv4 net.IP
+			for _, addr := range devices[0].Addrs {
+				if addr.To4() != nil {
+					foundIPv4 = addr
+					break
+				}
+			}
+			if foundIPv4 != nil {
+				ip = foundIPv4
+				log.Println("setting up device with preferrred-IPv4 addr: ", ip)
+			} else {
+				ip = devices[0].Addrs[0]
+				log.Println("setting up device with default-0-index addr: ", ip)
+			}
 			break
 		}
 		if i < maxRetries-1 {
