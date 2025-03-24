@@ -246,8 +246,10 @@ func checkDeviceConnectivity() error {
 	fabric := createBasicFabric()
 	ch, err := connectDevice(fabric)
 	if err != nil {
+		time.Sleep(2 * time.Second)
 		ch, err = connectDevice(fabric)
 		if err != nil {
+			time.Sleep(2 * time.Second)
 			ch, err = connectDevice(fabric)
 			if err != nil {
 				return fmt.Errorf("failed to connect: %w", err)
