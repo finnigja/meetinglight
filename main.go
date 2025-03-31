@@ -449,17 +449,25 @@ func updateLightStatus() string {
 		switch lightStatus {
 		case lightStatusOn:
 			systray.SetIcon(IconOn)
-			mOverride.Enable()
+			if mOverride != nil {
+				mOverride.Enable()
+			}
 			toggleMatterLight(true)
 		case lightStatusError:
 			systray.SetIcon(IconError)
-			mOverride.Disable()
+			if mOverride != nil {
+				mOverride.Disable()
+			}
 		case lightStatusUnpaired:
 			systray.SetIcon(IconUnpaired)
-			mOverride.Disable()
+			if mOverride != nil {
+				mOverride.Disable()
+			}
 		default:
 			systray.SetIcon(IconOff)
-			mOverride.Enable()
+			if mOverride != nil {
+				mOverride.Enable()
+			}
 			toggleMatterLight(false)
 		}
 	}
