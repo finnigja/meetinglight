@@ -1,7 +1,7 @@
 package main
 
 import (
-	"bytes"
+	//"bytes"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -11,7 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
+	//"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -62,13 +62,11 @@ var (
 	mStatus   *systray.MenuItem
 	mOverride *systray.MenuItem
 	// meeting detection bits
-	meetURLRegex = regexp.MustCompile(`^https://meet\.google\.com/[a-zA-Z0-9]{3}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{3}$`)
+	// Google Meet detection is disabled for now
+	// meetURLRegex = regexp.MustCompile(`^https://meet\.google\.com/[a-zA-Z0-9]{3}-[a-zA-Z0-9]{4}-[a-zA-Z0-9]{3}$`)
 )
 
 func initApp() {
-
-	log.Println("initApp()!")
-
 	dir, dirErr := os.UserConfigDir()
 	if dirErr == nil {
 		appDir = filepath.Join(dir, appName)
@@ -328,35 +326,38 @@ func isMeetingActive() bool {
 		}
 	}
 
-	// checking for Meet via Google Chrome tabs listing
-	script := `
-		tell application "Google Chrome"
-			set tabList to {}
-			repeat with win in windows
-				repeat with t in tabs of win
-					set tabInfo to URL of t
-					set end of tabList to tabInfo
-				end repeat
-			end repeat
-			return tabList
-		end tell
-	`
-	var out bytes.Buffer
-	cmd := exec.Command("osascript", "-e", script)
-	cmd.Stdout = &out
-	err = cmd.Run()
-	if err != nil {
-		log.Println("Checking for Google Meet usage via Chrome tab list resulted in error: ", err)
-	} else {
-		resultStr := out.String()
-		stringSlice := strings.Split(resultStr, ",")
-		for _, v := range stringSlice {
-			url := strings.TrimSpace(v)
-			if meetURLRegex.MatchString(strings.TrimSpace(url)) {
-				return true
-			}
-		}
-	}
+	//// checking for Meet via Google Chrome tabs listing
+	//script := `
+	//	tell application "Google Chrome"
+	//		set tabList to {}
+	//		repeat with win in windows
+	//			repeat with t in tabs of win
+	//				set tabInfo to URL of t
+	//				set end of tabList to tabInfo
+	//			end repeat
+	//		end repeat
+	//		return tabList
+	//	end tell
+	//`
+	//var out bytes.Buffer
+	//cmd := exec.Command("osascript", "-e", script)
+	//cmd.Stdout = &out
+	//err = cmd.Run()
+	//if err != nil {
+	//	log.Println("Checking for Google Meet usage via Chrome tab list resulted in error: ", err)
+	//} else {
+	//	resultStr := out.String()
+	//	stringSlice := strings.Split(resultStr, ",")
+	//	for _, v := range stringSlice {
+	//		url := strings.TrimSpace(v)
+	//		if meetURLRegex.MatchString(strings.TrimSpace(url)) {
+	//			return true
+	//		}
+	//	}
+	//}
+
+	// checking for Microsoft Teams
+	// TBD
 
 	// if we haven't found a meeting indicator & returned true already, then return false
 	return false
